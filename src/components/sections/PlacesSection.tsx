@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus, Trash2, ExternalLink, MapPin, ChevronDown, ChevronUp, Loader2, Link2 } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, MapPin, ChevronDown, ChevronUp, Loader2, Link2, RefreshCw } from 'lucide-react'
 import { Section, Item } from '@/lib/types'
 import { addItem, updateItem, deleteItem } from '@/lib/db'
 
@@ -56,11 +56,7 @@ function PlaceCard({ item, onSave, onDelete }: {
   const hasPreview = meta.fetched && (meta.og_title || meta.og_image)
   const displayTitle = meta.og_title || item.content || meta.url || '場所を追加'
 
-  async function handleUrlBlur() {
-    const url = urlInput.trim()
-    if (!url || url === meta.url) return
-    if (!url.startsWith('http')) { setUrlInput(meta.url ?? ''); return }
-
+  async function doFetch(url: string) {
     setLoading(true)
     const og = await fetchOg(url)
     const patch: Partial<Item> = {
@@ -77,6 +73,14 @@ function PlaceCard({ item, onSave, onDelete }: {
     }
     onSave(patch)
     setLoading(false)
+  }
+
+  async function handleUrlBlur() {
+    const url = urlInput.trim()
+    if (!url) return
+    if (!url.startsWith('http')) { setUrlInput(meta.url ?? ''); return }
+    if (url === meta.url && meta.fetched) return  // already fetched, skip
+    await doFetch(url)
   }
 
   function saveNote() {
@@ -130,8 +134,14 @@ function PlaceCard({ item, onSave, onDelete }: {
         {/* Title / URL input */}
         {hasPreview ? (
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold leading-snug" style={{ color: 'var(--label)' }}>{displayTitle}</p>
+            <p className="text-sm font-semibold leading-snug flex-1" style={{ color: 'var(--label)' }}>{displayTitle}</p>
             <div className="flex items-center gap-1.5 shrink-0">
+              {loading
+                ? <Loader2 size={13} className="animate-spin" style={{ color: 'var(--blue)' }} />
+                : <button onClick={() => meta.url && doFetch(meta.url)} className="opacity-30 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: 'var(--blue)' }} title="再取得">
+                    <RefreshCw size={13} />
+                  </button>
+              }
               {meta.url && !meta.og_image && (
                 <a href={meta.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)' }}>
                   <ExternalLink size={13} />

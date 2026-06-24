@@ -350,7 +350,11 @@ function ScheduleItem({ item, prevDate, onSave, onDelete, startDate, sectionId, 
               />
               {location.trim() && (
                 <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(location)}`}
+                  href={
+                    /^https?:\/\//.test(location.trim())
+                      ? location.trim()
+                      : `https://maps.google.com/?q=${encodeURIComponent(location)}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs shrink-0 px-1.5 py-0.5 rounded-md font-medium"
