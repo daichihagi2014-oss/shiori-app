@@ -1,14 +1,74 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, ChevronUp as Up, ChevronDown as Down, Banknote } from 'lucide-react'
+import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, ChevronUp as Up, ChevronDown as Down, Banknote, Timer } from 'lucide-react'
 import { Section, Item, ScheduleItemMetadata } from '@/lib/types'
 import { addItem, updateItem, deleteItem } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { formatDateShort, addDays } from '@/lib/utils'
 
+// ─── Emoji → category color mapping ───
+type EmojiCategory = { color: string; bg: string; shadow: string; label: string }
+const DEFAULT_CAT: EmojiCategory = { color: '#8E8E93', bg: 'rgba(142,142,147,0.06)', shadow: 'inset 3px 0 0 #8E8E93', label: 'その他' }
+
+const EMOJI_CATEGORY: Record<string, EmojiCategory> = {
+  // 移動 (Transport) — blue
+  '🚗': { color: '#007AFF', bg: 'rgba(0,122,255,0.045)', shadow: 'inset 3px 0 0 #007AFF', label: '移動' },
+  '🚄': { color: '#007AFF', bg: 'rgba(0,122,255,0.045)', shadow: 'inset 3px 0 0 #007AFF', label: '移動' },
+  '✈️': { color: '#007AFF', bg: 'rgba(0,122,255,0.045)', shadow: 'inset 3px 0 0 #007AFF', label: '移動' },
+  '🚢': { color: '#007AFF', bg: 'rgba(0,122,255,0.045)', shadow: 'inset 3px 0 0 #007AFF', label: '移動' },
+  // 食事 (Food) — orange
+  '🍽️': { color: '#FF9500', bg: 'rgba(255,149,0,0.05)', shadow: 'inset 3px 0 0 #FF9500', label: '食事' },
+  '☕':  { color: '#FF9500', bg: 'rgba(255,149,0,0.05)', shadow: 'inset 3px 0 0 #FF9500', label: '食事' },
+  // 宿泊 (Stay) — purple
+  '🏨': { color: '#AF52DE', bg: 'rgba(175,82,222,0.05)', shadow: 'inset 3px 0 0 #AF52DE', label: '宿泊' },
+  // 観光 (Sightseeing) — green
+  '📍': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '⛩️': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '🏖️': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '🏔️': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '🏯': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '🌸': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '🌺': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  '🦁': { color: '#34C759', bg: 'rgba(52,199,89,0.05)', shadow: 'inset 3px 0 0 #34C759', label: '観光' },
+  // アクティビティ (Activity) — pink
+  '🎡': { color: '#FF2D55', bg: 'rgba(255,45,85,0.05)', shadow: 'inset 3px 0 0 #FF2D55', label: 'アクティビティ' },
+  '🛍️': { color: '#FF2D55', bg: 'rgba(255,45,85,0.05)', shadow: 'inset 3px 0 0 #FF2D55', label: 'アクティビティ' },
+  '🎭': { color: '#FF2D55', bg: 'rgba(255,45,85,0.05)', shadow: 'inset 3px 0 0 #FF2D55', label: 'アクティビティ' },
+  '🎵': { color: '#FF2D55', bg: 'rgba(255,45,85,0.05)', shadow: 'inset 3px 0 0 #FF2D55', label: 'アクティビティ' },
+  '🎿': { color: '#FF2D55', bg: 'rgba(255,45,85,0.05)', shadow: 'inset 3px 0 0 #FF2D55', label: 'アクティビティ' },
+}
+
 const EMOJIS = ['📍','🍽️','🚗','🚄','✈️','🏨','⛩️','🏖️','🎡','🛍️','☕','🌸','🏔️','🎭','🎵','🚢','🎿','🏯','🌺','🦁']
 const EXPENSE_CATEGORIES = ['食費', '交通費', '宿泊費', '観光', 'お土産', '娯楽', 'その他']
+
+// Duration options (10-min increments, nicely labeled)
+const DURATION_OPTIONS: { value: number; label: string }[] = [
+  ...Array.from({ length: 6 }, (_, i) => {
+    const min = (i + 1) * 10
+    return { value: min, label: `${min}分` }
+  }),
+  { value: 70, label: '1時間10分' },
+  { value: 80, label: '1時間20分' },
+  { value: 90, label: '1時間30分' },
+  { value: 100, label: '1時間40分' },
+  { value: 110, label: '1時間50分' },
+  { value: 120, label: '2時間' },
+  { value: 150, label: '2時間30分' },
+  { value: 180, label: '3時間' },
+  { value: 210, label: '3時間30分' },
+  { value: 240, label: '4時間' },
+  { value: 300, label: '5時間' },
+  { value: 360, label: '6時間' },
+  { value: 480, label: '8時間' },
+]
+
+function calcEndTime(startTime: string, durationMin: number): string {
+  if (!startTime || !durationMin) return ''
+  const [h, m] = startTime.split(':').map(Number)
+  const total = h * 60 + m + durationMin
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
 
 interface Props {
   section: Section
@@ -28,7 +88,7 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
     if (newItem) onUpdate({ ...section, items: [...section.items, newItem] })
   }
 
-  async function handleItemUpdate(itemId: string, patch: Partial<Item>) {
+  async function handleItemSave(itemId: string, patch: Partial<Item>) {
     await updateItem(itemId, patch)
     onUpdate({ ...section, items: section.items.map(i => i.id === itemId ? { ...i, ...patch } : i) })
   }
@@ -60,6 +120,22 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
 
       {!collapsed && (
         <div className="space-y-2">
+          {/* Category legend */}
+          <div className="flex flex-wrap gap-2 mb-1 px-1">
+            {[
+              { color: '#007AFF', label: '移動' },
+              { color: '#FF9500', label: '食事' },
+              { color: '#AF52DE', label: '宿泊' },
+              { color: '#34C759', label: '観光' },
+              { color: '#FF2D55', label: 'アクティビティ' },
+            ].map(cat => (
+              <div key={cat.label} className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ background: cat.color }} />
+                <span className="text-xs" style={{ color: 'var(--label-tertiary)' }}>{cat.label}</span>
+              </div>
+            ))}
+          </div>
+
           {section.items.length === 0 && (
             <div className="text-center py-8 rounded-2xl text-sm" style={{ color: 'var(--label-tertiary)', border: '1.5px dashed var(--separator-opaque)' }}>
               スケジュールを追加しましょう
@@ -73,7 +149,7 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
               idx={idx}
               total={section.items.length}
               prevDate={idx > 0 ? (section.items[idx - 1].metadata as ScheduleItemMetadata).date : undefined}
-              onSave={(patch) => handleItemUpdate(item.id, patch)}
+              onSave={(patch) => handleItemSave(item.id, patch)}
               onDelete={() => handleDelete(item.id)}
               onMoveUp={() => handleMove(idx, idx - 1)}
               onMoveDown={() => handleMove(idx, idx + 1)}
@@ -96,37 +172,28 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
 }
 
 function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, onMoveDown, startDate, sectionId }: {
-  item: Item
-  idx: number
-  total: number
-  prevDate?: string
-  onSave: (patch: Partial<Item>) => void
-  onDelete: () => void
-  onMoveUp: () => void
-  onMoveDown: () => void
-  startDate?: string | null
-  sectionId: string
+  item: Item; idx: number; total: number; prevDate?: string
+  onSave: (patch: Partial<Item>) => void; onDelete: () => void
+  onMoveUp: () => void; onMoveDown: () => void
+  startDate?: string | null; sectionId: string
 }) {
   const meta = item.metadata as ScheduleItemMetadata
+  const cat = EMOJI_CATEGORY[meta.emoji ?? ''] ?? DEFAULT_CAT
+  const endTime = meta.time && meta.duration ? calcEndTime(meta.time, meta.duration) : null
+
   const [showEmoji, setShowEmoji] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // ── Local state for all text fields (only saved to DB on blur) ──
+  // Local state for text fields (saves only on blur — prevents IME/Japanese input issues)
   const [content, setContent] = useState(item.content)
   const [location, setLocation] = useState(meta.location ?? '')
   const [note, setNote] = useState(meta.note ?? '')
   const [paidBy, setPaidBy] = useState(meta.paid_by ?? '')
   const [amount, setAmount] = useState(meta.amount?.toString() ?? '')
 
-  // Merge updated metadata and save
   function saveMeta(update: Partial<ScheduleItemMetadata>) {
-    onSave({ metadata: { ...meta, ...update } as Record<string, unknown> })
-  }
-
-  // Immediate-save fields (no IME issue: select/date/time/emoji)
-  function updateMetaImmediate(update: Partial<ScheduleItemMetadata>) {
     onSave({ metadata: { ...meta, ...update } as Record<string, unknown> })
   }
 
@@ -134,16 +201,11 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 15 * 1024 * 1024) { alert('15MB以下の画像を選択してください'); return }
-    setUploading(true)
-    setUploadError('')
+    setUploading(true); setUploadError('')
     const ext = file.name.split('.').pop() ?? 'jpg'
     const path = `schedule/${sectionId}_${item.id}_${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('shiori-images').upload(path, file, { upsert: true })
-    if (error) {
-      setUploadError('アップロード失敗: ' + error.message)
-      setUploading(false)
-      return
-    }
+    if (error) { setUploadError('アップロード失敗: ' + error.message); setUploading(false); return }
     const { data } = supabase.storage.from('shiori-images').getPublicUrl(path)
     saveMeta({ photo_url: data.publicUrl })
     setUploading(false)
@@ -163,25 +225,24 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
         </div>
       )}
 
-      <div className="sf-card px-3 py-3 group">
+      {/* Color-coded card: left stripe via box-shadow + subtle background tint */}
+      <div className="px-3 py-3 group" style={{
+        background: cat.bg || 'var(--bg-elevated)',
+        borderRadius: '16px',
+        boxShadow: `${cat.shadow}, 0 1px 0 rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)`,
+      }}>
         <div className="flex gap-2">
-          {/* Reorder buttons (works on all devices) */}
+          {/* Reorder buttons */}
           <div className="flex flex-col gap-0.5 flex-shrink-0 justify-center">
-            <button
-              onClick={onMoveUp}
-              disabled={idx === 0}
-              className="rounded-md p-0.5 transition-colors disabled:opacity-20"
-              style={{ color: 'var(--label-tertiary)' }}
-            >
-              <Up size={14} />
+            <button onClick={onMoveUp} disabled={idx === 0}
+              className="rounded p-0.5 disabled:opacity-20 transition-colors"
+              style={{ color: cat.color }}>
+              <Up size={13} />
             </button>
-            <button
-              onClick={onMoveDown}
-              disabled={idx === total - 1}
-              className="rounded-md p-0.5 transition-colors disabled:opacity-20"
-              style={{ color: 'var(--label-tertiary)' }}
-            >
-              <Down size={14} />
+            <button onClick={onMoveDown} disabled={idx === total - 1}
+              className="rounded p-0.5 disabled:opacity-20 transition-colors"
+              style={{ color: cat.color }}>
+              <Down size={13} />
             </button>
           </div>
 
@@ -189,8 +250,8 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setShowEmoji(!showEmoji)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
-              style={{ background: 'rgba(0,122,255,0.08)' }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-all"
+              style={{ background: `${cat.color}18` }}
             >
               {meta.emoji || '📍'}
             </button>
@@ -199,7 +260,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--separator-opaque)' }}>
                 {EMOJIS.map(e => (
                   <button key={e}
-                    onClick={() => { updateMetaImmediate({ emoji: e }); setShowEmoji(false) }}
+                    onClick={() => { saveMeta({ emoji: e }); setShowEmoji(false) }}
                     className="text-lg p-1 rounded-lg hover:bg-gray-100">
                     {e}
                   </button>
@@ -210,40 +271,71 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
 
           {/* Fields */}
           <div className="flex-1 min-w-0 space-y-1.5">
-            {/* Time + Date */}
+            {/* Category label */}
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-xs font-semibold" style={{ color: cat.color }}>{cat.label}</span>
+            </div>
+
+            {/* Time row: start → end  [duration select] */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1">
-                <Clock size={11} style={{ color: 'var(--label-tertiary)' }} />
+                <Clock size={11} style={{ color: cat.color }} />
                 <input
                   type="time"
+                  step="600"
                   value={meta.time ?? ''}
-                  onChange={e => updateMetaImmediate({ time: e.target.value })}
+                  onChange={e => saveMeta({ time: e.target.value })}
                   className="text-xs focus:outline-none bg-transparent font-mono"
                   style={{ color: 'var(--label-secondary)', width: '72px' }}
                 />
               </div>
+
+              {/* End time (auto-calculated) */}
+              {endTime && (
+                <div className="flex items-center gap-1 text-xs font-mono" style={{ color: cat.color }}>
+                  <span>→</span>
+                  <span>{endTime}</span>
+                </div>
+              )}
+
+              {/* Duration select */}
+              <div className="flex items-center gap-1">
+                <Timer size={11} style={{ color: 'var(--label-tertiary)' }} />
+                <select
+                  value={meta.duration ?? ''}
+                  onChange={e => saveMeta({ duration: e.target.value ? Number(e.target.value) : undefined })}
+                  className="text-xs focus:outline-none rounded-lg px-1.5 py-0.5"
+                  style={{ background: 'transparent', color: meta.duration ? cat.color : 'var(--label-tertiary)', border: `1px solid ${meta.duration ? cat.color + '40' : 'var(--separator-opaque)'}`, maxWidth: '100px' }}
+                >
+                  <option value="">所要時間</option>
+                  {DURATION_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
               <input
                 type="date"
                 value={meta.date ?? ''}
-                onChange={e => updateMetaImmediate({ date: e.target.value })}
+                onChange={e => saveMeta({ date: e.target.value })}
                 min={startDate || undefined}
                 className="text-xs rounded-lg px-2 py-0.5 focus:outline-none"
-                style={{ border: '1px solid var(--separator-opaque)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)' }}
+                style={{ border: '1px solid var(--separator-opaque)', background: 'rgba(255,255,255,0.6)', color: 'var(--label-secondary)' }}
               />
             </div>
 
-            {/* Content — local state, save on blur */}
+            {/* Content — local state */}
             <input
               type="text"
               value={content}
               onChange={e => setContent(e.target.value)}
               onBlur={() => { if (content !== item.content) onSave({ content }) }}
               placeholder="活動内容（例: 伏見稲荷大社を観光）"
-              className="w-full text-sm font-medium focus:outline-none bg-transparent"
+              className="w-full text-sm font-semibold focus:outline-none bg-transparent"
               style={{ color: 'var(--label)' }}
             />
 
-            {/* Location — local state, save on blur */}
+            {/* Location — local state */}
             <div className="flex items-center gap-1">
               <MapPin size={11} style={{ color: 'var(--label-tertiary)' }} className="flex-shrink-0" />
               <input
@@ -257,7 +349,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
               />
             </div>
 
-            {/* Note — local state, save on blur */}
+            {/* Note — local state */}
             <input
               type="text"
               value={note}
@@ -268,7 +360,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
               style={{ color: 'var(--label-tertiary)' }}
             />
 
-            {/* Cost — local state, save on blur */}
+            {/* Cost row */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1">
                 <Banknote size={11} style={{ color: 'var(--label-tertiary)' }} />
@@ -287,9 +379,9 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                 <>
                   <select
                     value={meta.category ?? 'その他'}
-                    onChange={e => updateMetaImmediate({ category: e.target.value })}
+                    onChange={e => saveMeta({ category: e.target.value })}
                     className="text-xs rounded-lg px-2 py-0.5 focus:outline-none"
-                    style={{ background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)' }}
+                    style={{ background: 'rgba(255,255,255,0.7)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)' }}
                   >
                     {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
@@ -300,7 +392,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                     onBlur={() => saveMeta({ paid_by: paidBy })}
                     placeholder="支払者"
                     className="text-xs focus:outline-none rounded-lg px-2 py-0.5"
-                    style={{ background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)', width: '72px' }}
+                    style={{ background: 'rgba(255,255,255,0.7)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)', width: '72px' }}
                   />
                 </>
               )}
@@ -318,11 +410,9 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
               </div>
             ) : (
               <div>
-                <button
-                  onClick={() => fileRef.current?.click()}
+                <button onClick={() => fileRef.current?.click()}
                   className="flex items-center gap-1.5 text-xs mt-0.5"
-                  style={{ color: 'var(--label-tertiary)' }}
-                >
+                  style={{ color: 'var(--label-tertiary)' }}>
                   {uploading ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
                   {uploading ? 'アップロード中...' : '写真を追加'}
                 </button>
@@ -333,11 +423,9 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
           </div>
 
           {/* Delete */}
-          <button
-            onClick={onDelete}
+          <button onClick={onDelete}
             className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 rounded-full p-1 self-start"
-            style={{ color: 'var(--label-quaternary)' }}
-          >
+            style={{ color: 'var(--label-quaternary)' }}>
             <Trash2 size={14} />
           </button>
         </div>

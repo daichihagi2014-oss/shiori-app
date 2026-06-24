@@ -3,6 +3,7 @@ export type SectionType = 'schedule' | 'todo' | 'packing' | 'memo' | 'expense'
 export interface ScheduleItemMetadata {
   date?: string
   time?: string
+  duration?: number   // minutes in 10-min increments
   location?: string
   note?: string
   emoji?: string
