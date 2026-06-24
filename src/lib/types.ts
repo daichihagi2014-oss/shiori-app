@@ -1,4 +1,4 @@
-export type SectionType = 'schedule' | 'todo' | 'packing' | 'memo'
+export type SectionType = 'schedule' | 'todo' | 'packing' | 'memo' | 'expense'
 
 export interface ScheduleItemMetadata {
   date?: string
@@ -6,6 +6,18 @@ export interface ScheduleItemMetadata {
   location?: string
   note?: string
   emoji?: string
+  photo_url?: string
+}
+
+export interface ExpenseItemMetadata {
+  amount?: number
+  paid_by?: string
+  category?: string
+}
+
+export interface ExpenseMember {
+  name: string
+  ratio: number
 }
 
 export interface Item {
@@ -14,7 +26,7 @@ export interface Item {
   content: string
   is_checked: boolean
   position: number
-  metadata: ScheduleItemMetadata & Record<string, unknown>
+  metadata: ScheduleItemMetadata & ExpenseItemMetadata & Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -26,6 +38,7 @@ export interface Section {
   title: string
   position: number
   items: Item[]
+  data: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -46,6 +59,7 @@ export interface Itinerary {
 }
 
 export interface CreateItineraryInput {
+  slug?: string
   title: string
   destination: string
   description: string

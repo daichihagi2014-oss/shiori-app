@@ -18,7 +18,7 @@ export default function CoverSection({ itinerary, onUpdate }: Props) {
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert('5MB以下の画像を選択してください'); return }
+    if (file.size > 15 * 1024 * 1024) { alert('15MB以下の画像を選択してください'); return }
 
     setUploading(true)
     const url = await uploadCoverImage(itinerary.id, file)

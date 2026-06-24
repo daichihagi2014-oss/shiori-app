@@ -4,15 +4,21 @@ import { generateSlug, hashPassword } from './utils'
 
 export async function createItinerary(input: CreateItineraryInput): Promise<{ slug: string } | { error: string }> {
   const passwordHash = await hashPassword(input.password)
-  const slug = generateSlug()
+
+  // Use custom slug if provided, otherwise generate random
+  const candidateSlug = input.slug?.trim() || generateSlug()
 
   const { data: existing } = await supabase
     .from('itineraries')
     .select('slug')
-    .eq('slug', slug)
+    .eq('slug', candidateSlug)
     .single()
 
-  const finalSlug = existing ? generateSlug() : slug
+  if (existing) {
+    if (input.slug) return { error: `「${candidateSlug}」はすでに使われています。別のIDを入力してください。` }
+  }
+
+  const finalSlug = existing ? generateSlug() : candidateSlug
 
   const { error } = await supabase.from('itineraries').insert({
     slug: finalSlug,
@@ -52,7 +58,7 @@ export async function getItinerary(slug: string): Promise<Itinerary | null> {
       .eq('section_id', section.id)
       .order('position')
 
-    sectionsWithItems.push({ ...section, items: items ?? [] })
+    sectionsWithItems.push({ ...section, items: items ?? [], data: section.data ?? {} })
   }
 
   return { ...itinerary, sections: sectionsWithItems }
@@ -92,10 +98,10 @@ export async function addSection(
     .single()
 
   if (error) return null
-  return { ...data, items: [] }
+  return { ...data, items: [], data: data.data ?? {} }
 }
 
-export async function updateSection(sectionId: string, updates: Partial<Pick<Section, 'title' | 'position'>>): Promise<void> {
+export async function updateSection(sectionId: string, updates: Partial<Pick<Section, 'title' | 'position' | 'data'>>): Promise<void> {
   await supabase.from('sections').update(updates).eq('id', sectionId)
 }
 

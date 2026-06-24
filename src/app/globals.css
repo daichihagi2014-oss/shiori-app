@@ -1,54 +1,151 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafaf9;
-  --foreground: #1c1917;
+  /* Apple System Colors */
+  --blue:   #007AFF;
+  --green:  #34C759;
+  --orange: #FF9500;
+  --red:    #FF3B30;
+  --purple: #AF52DE;
+  --pink:   #FF2D55;
+  --teal:   #5AC8FA;
+  --yellow: #FFCC00;
+
+  /* Backgrounds */
+  --bg:          #F2F2F7;
+  --bg-elevated: #FFFFFF;
+  --bg-grouped:  #F2F2F7;
+
+  /* Labels */
+  --label:           #000000;
+  --label-secondary: rgba(60,60,67,0.6);
+  --label-tertiary:  rgba(60,60,67,0.3);
+  --label-quaternary:rgba(60,60,67,0.18);
+
+  /* Separators */
+  --separator:        rgba(60,60,67,0.29);
+  --separator-opaque: #C6C6C8;
+
+  /* Fills */
+  --fill:           rgba(120,120,128,0.2);
+  --fill-secondary: rgba(120,120,128,0.16);
+  --fill-tertiary:  rgba(118,118,128,0.12);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Meiryo', 'メイリオ', sans-serif;
+  background: var(--bg);
+  color: var(--label);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+               'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
 }
 
-html {
-  scroll-behavior: smooth;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--separator-opaque); border-radius: 2px; }
 
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
+/* Contenteditable placeholder */
 [contenteditable]:empty:before {
   content: attr(data-placeholder);
-  color: #94a3b8;
+  color: var(--label-tertiary);
   pointer-events: none;
 }
 
+/* ── Animations ── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-in {
-  animation: fadeIn 0.3s ease forwards;
-}
+.animate-fade-in { animation: fadeIn 0.22s cubic-bezier(0.25,0.46,0.45,0.94) forwards; }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-12px); }
+  from { opacity: 0; transform: translateX(-8px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-.animate-slide-in {
-  animation: slideIn 0.25s ease forwards;
+.animate-slide-in { animation: slideIn 0.18s cubic-bezier(0.25,0.46,0.45,0.94) forwards; }
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
+.animate-scale-in { animation: scaleIn 0.2s cubic-bezier(0.25,0.46,0.45,0.94) forwards; }
+
+/* ── Apple-style components ── */
+.sf-card {
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.sf-inset {
+  background: var(--fill-tertiary);
+  border-radius: 12px;
+}
+
+.sf-btn-primary {
+  background: var(--blue);
+  color: #fff;
+  border-radius: 14px;
+  padding: 14px 20px;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  transition: opacity 0.12s, transform 0.1s;
+}
+.sf-btn-primary:hover  { opacity: 0.85; }
+.sf-btn-primary:active { transform: scale(0.98); }
+.sf-btn-primary:disabled { opacity: 0.38; }
+
+.sf-input {
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--separator-opaque);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--label);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  width: 100%;
+}
+.sf-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+}
+.sf-input::placeholder { color: var(--label-tertiary); }
+
+/* ── Typography ── */
+.sf-title-1   { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; }
+.sf-title-2   { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.25; }
+.sf-title-3   { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+.sf-headline  { font-size: 16px; font-weight: 600; letter-spacing: -0.1px; }
+.sf-body      { font-size: 16px; font-weight: 400; line-height: 1.5; }
+.sf-callout   { font-size: 15px; font-weight: 400; }
+.sf-subhead   { font-size: 14px; font-weight: 400; }
+.sf-footnote  { font-size: 13px; font-weight: 400; color: var(--label-secondary); }
+.sf-caption   { font-size: 12px; font-weight: 400; color: var(--label-tertiary); }
+
+/* ── Sidebar nav item ── */
+.sf-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--label-secondary);
+  transition: background 0.12s, color 0.12s;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.sf-nav-item:hover     { background: var(--fill-tertiary); color: var(--label); }
+.sf-nav-item.active    { background: rgba(0,122,255,0.12); color: var(--blue); font-weight: 600; }
