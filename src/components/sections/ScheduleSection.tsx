@@ -1,13 +1,14 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, GripVertical, Banknote } from 'lucide-react'
 import { Section, Item, ScheduleItemMetadata } from '@/lib/types'
 import { addItem, updateItem, deleteItem } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { formatDateShort, addDays } from '@/lib/utils'
 
 const EMOJIS = ['📍','🍽️','🚗','🚄','✈️','🏨','⛩️','🏖️','🎡','🛍️','☕','🌸','🏔️','🎭','🎵','🚢','🎿','🏯','🌺','🦁']
+const EXPENSE_CATEGORIES = ['食費', '交通費', '宿泊費', '観光', 'お土産', '娯楽', 'その他']
 
 interface Props {
   section: Section
@@ -150,8 +151,9 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
   const meta = item.metadata as ScheduleItemMetadata
   const showDivider = meta.date && meta.date !== prevDate
 
-  function updateMeta(key: keyof ScheduleItemMetadata, value: string) {
-    onUpdate({ metadata: { ...meta, [key]: value } as Record<string, unknown> })
+  function updateMeta(key: keyof ScheduleItemMetadata, value: string | number) {
+    const parsed = key === 'amount' ? (value === '' ? undefined : Number(value)) : value
+    onUpdate({ metadata: { ...meta, [key]: parsed } as Record<string, unknown> })
   }
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -265,6 +267,42 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
               className="text-xs focus:outline-none bg-transparent w-full"
               style={{ color: 'var(--label-tertiary)' }}
             />
+
+            {/* Cost */}
+            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+              <div className="flex items-center gap-1">
+                <Banknote size={11} style={{ color: 'var(--label-tertiary)', flexShrink: 0 }} />
+                <span className="text-xs" style={{ color: 'var(--label-tertiary)' }}>¥</span>
+                <input
+                  type="number"
+                  value={meta.amount ?? ''}
+                  onChange={e => updateMeta('amount', e.target.value === '' ? '' : e.target.value)}
+                  placeholder="0"
+                  className="text-xs focus:outline-none bg-transparent font-mono w-20"
+                  style={{ color: meta.amount ? 'var(--green)' : 'var(--label-tertiary)' }}
+                />
+              </div>
+              {(meta.amount && Number(meta.amount) > 0) ? (
+                <>
+                  <select
+                    value={meta.category ?? 'その他'}
+                    onChange={e => updateMeta('category', e.target.value)}
+                    className="text-xs rounded-lg px-2 py-0.5 focus:outline-none"
+                    style={{ background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)' }}
+                  >
+                    {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    value={meta.paid_by ?? ''}
+                    onChange={e => updateMeta('paid_by', e.target.value)}
+                    placeholder="支払者"
+                    className="text-xs focus:outline-none rounded-lg px-2 py-0.5"
+                    style={{ background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)', width: '72px' }}
+                  />
+                </>
+              ) : null}
+            </div>
 
             {/* Photo */}
             {meta.photo_url ? (

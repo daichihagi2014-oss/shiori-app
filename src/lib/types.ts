@@ -7,6 +7,9 @@ export interface ScheduleItemMetadata {
   note?: string
   emoji?: string
   photo_url?: string
+  amount?: number
+  category?: string
+  paid_by?: string
 }
 
 export interface ExpenseItemMetadata {

@@ -112,7 +112,7 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
       case 'memo':
         return <MemoSection key={section.id} section={section} onUpdate={updateSection} />
       case 'expense':
-        return <ExpenseSection key={section.id} section={section} onUpdate={updateSection} />
+        return <ExpenseSection key={section.id} section={section} itinerary={itinerary} onUpdate={updateSection} />
     }
   }
 
