@@ -42,6 +42,13 @@ const EMOJI_CATEGORY: Record<string, EmojiCategory> = {
 const EMOJIS = ['📍','🍽️','🚗','🚄','✈️','🏨','⛩️','🏖️','🎡','🛍️','☕','🌸','🏔️','🎭','🎵','🚢','🎿','🏯','🌺','🦁']
 const EXPENSE_CATEGORIES = ['食費', '交通費', '宿泊費', '観光', 'お土産', '娯楽', 'その他']
 
+// Start time options (10-min increments, 00:00 → 23:50)
+const TIME_OPTIONS = Array.from({ length: 144 }, (_, i) => {
+  const h = Math.floor(i / 6)
+  const m = (i % 6) * 10
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+})
+
 // Duration options (10-min increments, nicely labeled)
 const DURATION_OPTIONS: { value: number; label: string }[] = [
   ...Array.from({ length: 6 }, (_, i) => {
@@ -280,14 +287,15 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1">
                 <Clock size={11} style={{ color: cat.color }} />
-                <input
-                  type="time"
-                  step="600"
+                <select
                   value={meta.time ?? ''}
                   onChange={e => saveMeta({ time: e.target.value })}
-                  className="text-xs focus:outline-none bg-transparent font-mono"
-                  style={{ color: 'var(--label-secondary)', width: '72px' }}
-                />
+                  className="text-xs focus:outline-none rounded-lg px-1.5 py-0.5 font-mono"
+                  style={{ color: meta.time ? 'var(--label-secondary)' : 'var(--label-tertiary)', background: 'transparent', border: `1px solid ${meta.time ? cat.color + '40' : 'var(--separator-opaque)'}` }}
+                >
+                  <option value="">時刻</option>
+                  {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
 
               {/* End time (auto-calculated) */}
@@ -424,7 +432,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
 
           {/* Delete */}
           <button onClick={onDelete}
-            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 rounded-full p-1 self-start"
+            className="opacity-30 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0 rounded-full p-1 self-start"
             style={{ color: 'var(--label-quaternary)' }}>
             <Trash2 size={14} />
           </button>

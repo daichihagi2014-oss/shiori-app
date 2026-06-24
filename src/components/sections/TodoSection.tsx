@@ -56,7 +56,7 @@ function TodoItem({ item, accentColor, onToggle, onSave, onDelete }: {
       />
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        className="opacity-30 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
         style={{ color: 'var(--label-quaternary)' }}
       >
         <Trash2 size={14} />

@@ -64,7 +64,7 @@ export default function MemoSection({ section, onUpdate }: Props) {
               />
               <button
                 onClick={() => handleDelete(item.id)}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-1"
+                className="absolute top-2 right-2 opacity-40 md:opacity-0 md:group-hover:opacity-100 transition-opacity rounded-full p-1"
                 style={{ background: 'rgba(255,59,48,0.1)', color: 'var(--red)' }}
               >
                 <Trash2 size={13} />
