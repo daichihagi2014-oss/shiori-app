@@ -80,10 +80,11 @@ function calcEndTime(startTime: string, durationMin: number): string {
 interface Props {
   section: Section
   startDate?: string | null
+  members?: string[]
   onUpdate: (section: Section) => void
 }
 
-export default function ScheduleSection({ section, startDate, onUpdate }: Props) {
+export default function ScheduleSection({ section, startDate, members, onUpdate }: Props) {
   const [collapsed, setCollapsed] = useState(false)
 
   async function addScheduleItem() {
@@ -162,6 +163,7 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
               onMoveDown={() => handleMove(idx, idx + 1)}
               startDate={startDate}
               sectionId={section.id}
+              members={members}
             />
           ))}
 
@@ -178,11 +180,11 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
   )
 }
 
-function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, onMoveDown, startDate, sectionId }: {
+function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, onMoveDown, startDate, sectionId, members }: {
   item: Item; idx: number; total: number; prevDate?: string
   onSave: (patch: Partial<Item>) => void; onDelete: () => void
   onMoveUp: () => void; onMoveDown: () => void
-  startDate?: string | null; sectionId: string
+  startDate?: string | null; sectionId: string; members?: string[]
 }) {
   const meta = item.metadata as ScheduleItemMetadata
   const cat = EMOJI_CATEGORY[meta.emoji ?? ''] ?? DEFAULT_CAT
@@ -278,8 +280,22 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
 
           {/* Fields */}
           <div className="flex-1 min-w-0 space-y-1.5">
+            {/* Date — FIRST, prominent */}
+            <input
+              type="date"
+              value={meta.date ?? ''}
+              onChange={e => saveMeta({ date: e.target.value })}
+              min={startDate || undefined}
+              className="text-xs rounded-lg px-2 py-0.5 focus:outline-none font-semibold"
+              style={{
+                border: `1px solid ${meta.date ? cat.color + '60' : 'var(--separator-opaque)'}`,
+                background: meta.date ? `${cat.color}12` : 'rgba(255,255,255,0.6)',
+                color: meta.date ? cat.color : 'var(--label-tertiary)',
+              }}
+            />
+
             {/* Category label */}
-            <div className="flex items-center gap-1.5 mb-0.5">
+            <div className="flex items-center gap-1.5">
               <span className="text-xs font-semibold" style={{ color: cat.color }}>{cat.label}</span>
             </div>
 
@@ -298,7 +314,6 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                 </select>
               </div>
 
-              {/* End time (auto-calculated) */}
               {endTime && (
                 <div className="flex items-center gap-1 text-xs font-mono" style={{ color: cat.color }}>
                   <span>→</span>
@@ -306,7 +321,6 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                 </div>
               )}
 
-              {/* Duration select */}
               <div className="flex items-center gap-1">
                 <Timer size={11} style={{ color: 'var(--label-tertiary)' }} />
                 <select
@@ -321,15 +335,6 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                   ))}
                 </select>
               </div>
-
-              <input
-                type="date"
-                value={meta.date ?? ''}
-                onChange={e => saveMeta({ date: e.target.value })}
-                min={startDate || undefined}
-                className="text-xs rounded-lg px-2 py-0.5 focus:outline-none"
-                style={{ border: '1px solid var(--separator-opaque)', background: 'rgba(255,255,255,0.6)', color: 'var(--label-secondary)' }}
-              />
             </div>
 
             {/* Content — local state */}
@@ -343,7 +348,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
               style={{ color: 'var(--label)' }}
             />
 
-            {/* Location — local state */}
+            {/* Location — local state + Google Maps link */}
             <div className="flex items-center gap-1">
               <MapPin size={11} style={{ color: 'var(--label-tertiary)' }} className="flex-shrink-0" />
               <input
@@ -352,9 +357,21 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                 onChange={e => setLocation(e.target.value)}
                 onBlur={() => saveMeta({ location })}
                 placeholder="場所・住所"
-                className="text-xs focus:outline-none bg-transparent w-full"
+                className="text-xs focus:outline-none bg-transparent flex-1 min-w-0"
                 style={{ color: 'var(--label-secondary)' }}
               />
+              {location.trim() && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs shrink-0 px-1.5 py-0.5 rounded-md font-medium"
+                  style={{ color: 'var(--blue)', background: 'rgba(0,122,255,0.08)' }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  地図
+                </a>
+              )}
             </div>
 
             {/* Note — local state */}
@@ -393,15 +410,27 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
                   >
                     {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
-                  <input
-                    type="text"
-                    value={paidBy}
-                    onChange={e => setPaidBy(e.target.value)}
-                    onBlur={() => saveMeta({ paid_by: paidBy })}
-                    placeholder="支払者"
-                    className="text-xs focus:outline-none rounded-lg px-2 py-0.5"
-                    style={{ background: 'rgba(255,255,255,0.7)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)', width: '72px' }}
-                  />
+                  {members && members.length > 0 ? (
+                    <select
+                      value={paidBy}
+                      onChange={e => { setPaidBy(e.target.value); saveMeta({ paid_by: e.target.value }) }}
+                      className="text-xs focus:outline-none rounded-lg px-2 py-0.5"
+                      style={{ background: 'rgba(255,255,255,0.7)', color: paidBy ? 'var(--label-secondary)' : 'var(--label-tertiary)', border: '1px solid var(--separator-opaque)', maxWidth: '90px' }}
+                    >
+                      <option value="">支払者</option>
+                      {members.map(name => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={paidBy}
+                      onChange={e => setPaidBy(e.target.value)}
+                      onBlur={() => saveMeta({ paid_by: paidBy })}
+                      placeholder="支払者"
+                      className="text-xs focus:outline-none rounded-lg px-2 py-0.5"
+                      style={{ background: 'rgba(255,255,255,0.7)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)', width: '72px' }}
+                    />
+                  )}
                 </>
               )}
             </div>

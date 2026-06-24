@@ -1,4 +1,10 @@
-export type SectionType = 'schedule' | 'todo' | 'packing' | 'memo' | 'expense'
+export type SectionType = 'schedule' | 'todo' | 'packing' | 'memo' | 'expense' | 'members' | 'places'
+
+export interface TripMember {
+  id: string
+  name: string
+  color: string
+}
 
 export interface ScheduleItemMetadata {
   date?: string

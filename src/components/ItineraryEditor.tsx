@@ -11,6 +11,9 @@ import ScheduleSection from './sections/ScheduleSection'
 import TodoSection from './sections/TodoSection'
 import MemoSection from './sections/MemoSection'
 import ExpenseSection from './sections/ExpenseSection'
+import MembersSection from './sections/MembersSection'
+import PlacesSection from './sections/PlacesSection'
+import { TripMember } from '@/lib/types'
 
 interface Props {
   itinerary: Itinerary
@@ -23,6 +26,8 @@ const SECTION_ICONS: Record<SectionType, string> = {
   packing:  '🎒',
   memo:     '📝',
   expense:  '💴',
+  members:  '👥',
+  places:   '📌',
 }
 
 const SECTION_SHORT: Record<SectionType, string> = {
@@ -31,10 +36,14 @@ const SECTION_SHORT: Record<SectionType, string> = {
   packing:  '持物',
   memo:     'メモ',
   expense:  '費用',
+  members:  'メンバー',
+  places:   '候補地',
 }
 
 const SECTION_ADD_OPTIONS: { type: SectionType; label: string }[] = [
+  { type: 'members',  label: '👥 旅のメンバー' },
   { type: 'schedule', label: '📅 スケジュール' },
+  { type: 'places',   label: '📌 候補地リスト' },
   { type: 'todo',     label: '✅ TODOリスト' },
   { type: 'packing',  label: '🎒 持ち物リスト' },
   { type: 'memo',     label: '📝 メモ' },
@@ -47,6 +56,8 @@ const SECTION_TITLES: Record<SectionType, string> = {
   packing:  '持ち物リスト',
   memo:     'メモ',
   expense:  '費用管理',
+  members:  '旅のメンバー',
+  places:   '候補地リスト',
 }
 
 export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
@@ -101,10 +112,13 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
     setActiveSection('cover')
   }
 
+  const membersSection = itinerary.sections.find(s => s.type === 'members')
+  const tripMemberNames: string[] = ((membersSection?.data?.members as TripMember[]) ?? []).map(m => m.name)
+
   function renderSection(section: Section) {
     switch (section.type) {
       case 'schedule':
-        return <ScheduleSection key={section.id} section={section} startDate={itinerary.start_date} onUpdate={updateSection} />
+        return <ScheduleSection key={section.id} section={section} startDate={itinerary.start_date} members={tripMemberNames} onUpdate={updateSection} />
       case 'todo':
         return <TodoSection key={section.id} section={section} onUpdate={updateSection} accentColor="green" icon="✅" />
       case 'packing':
@@ -112,7 +126,11 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
       case 'memo':
         return <MemoSection key={section.id} section={section} onUpdate={updateSection} />
       case 'expense':
-        return <ExpenseSection key={section.id} section={section} itinerary={itinerary} onUpdate={updateSection} />
+        return <ExpenseSection key={section.id} section={section} itinerary={itinerary} tripMembers={tripMemberNames} onUpdate={updateSection} />
+      case 'members':
+        return <MembersSection key={section.id} section={section} onUpdate={updateSection} />
+      case 'places':
+        return <PlacesSection key={section.id} section={section} onUpdate={updateSection} />
     }
   }
 
