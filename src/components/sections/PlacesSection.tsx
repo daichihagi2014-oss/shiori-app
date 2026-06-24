@@ -93,6 +93,7 @@ function PlaceCard({ item, onSave, onDelete }: {
       background: 'var(--bg-elevated)',
       border: '1px solid var(--separator-opaque)',
       boxShadow: '0 1px 0 rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)',
+      position: 'relative',
     }}>
       {/* OGP image */}
       {meta.og_image && !imgError && (
@@ -131,29 +132,35 @@ function PlaceCard({ item, onSave, onDelete }: {
           </div>
         )}
 
+        {/* Delete button — always absolute top-right, large tap target */}
+        <button
+          onClick={onDelete}
+          className="absolute top-2 right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full opacity-40 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+          style={{ background: 'rgba(0,0,0,0.25)', color: 'white' }}
+        >
+          <Trash2 size={14} />
+        </button>
+
         {/* Title / URL input */}
         {hasPreview ? (
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 pr-8">
             <p className="text-sm font-semibold leading-snug flex-1" style={{ color: 'var(--label)' }}>{displayTitle}</p>
             <div className="flex items-center gap-1.5 shrink-0">
               {loading
                 ? <Loader2 size={13} className="animate-spin" style={{ color: 'var(--blue)' }} />
-                : <button onClick={() => meta.url && doFetch(meta.url)} className="opacity-30 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: 'var(--blue)' }} title="再取得">
+                : <button onClick={() => meta.url && doFetch(meta.url)} className="opacity-40 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1" style={{ color: 'var(--blue)' }}>
                     <RefreshCw size={13} />
                   </button>
               }
               {meta.url && !meta.og_image && (
-                <a href={meta.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)' }}>
+                <a href={meta.url} target="_blank" rel="noopener noreferrer" className="p-1" style={{ color: 'var(--blue)' }}>
                   <ExternalLink size={13} />
                 </a>
               )}
-              <button onClick={onDelete} className="opacity-30 md:opacity-0 md:group-hover:opacity-100 transition-opacity" style={{ color: 'var(--label-quaternary)' }}>
-                <Trash2 size={13} />
-              </button>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pr-8">
             <MapPin size={12} style={{ color: 'var(--blue)', flexShrink: 0 }} />
             <input
               type="url"
@@ -166,9 +173,6 @@ function PlaceCard({ item, onSave, onDelete }: {
               style={{ color: 'var(--label-secondary)' }}
             />
             {loading && <Loader2 size={13} className="animate-spin shrink-0" style={{ color: 'var(--blue)' }} />}
-            <button onClick={onDelete} className="opacity-30 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0" style={{ color: 'var(--label-quaternary)' }}>
-              <Trash2 size={13} />
-            </button>
           </div>
         )}
 
