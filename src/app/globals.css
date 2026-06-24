@@ -34,7 +34,14 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+/* ── iOS viewport height fix ──
+   100dvh = dynamic viewport height, adapts when Safari browser chrome shows/hides.
+   Fallback: 100vh for older browsers */
+html {
+  scroll-behavior: smooth;
+  /* Prevent iOS body bounce from extending beyond safe area */
+  height: -webkit-fill-available;
+}
 
 body {
   background: var(--bg);
@@ -44,9 +51,43 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 16px;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
 }
 
-/* Scrollbar */
+/* Editor full-height shell — dvh adapts to iOS Safari chrome */
+.editor-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── iOS: prevent input zoom (iOS auto-zooms inputs with font-size < 16px) ── */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── iOS: remove default input/select appearance ── */
+input, textarea, select, button {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+input[type="date"], input[type="time"] {
+  -webkit-appearance: textfield;
+}
+
+/* ── iOS: prevent callout on long press on buttons ── */
+button, a { -webkit-touch-callout: none; }
+
+/* ── iOS: smooth momentum scrolling ── */
+.overflow-y-auto, [style*="overflow-y: auto"], [style*="overflow: auto"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar (non-iOS) */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--separator-opaque); border-radius: 2px; }
@@ -98,9 +139,11 @@ body {
   font-size: 16px;
   letter-spacing: -0.2px;
   transition: opacity 0.12s, transform 0.1s;
+  cursor: pointer;
+  border: none;
 }
 .sf-btn-primary:hover  { opacity: 0.85; }
-.sf-btn-primary:active { transform: scale(0.98); }
+.sf-btn-primary:active { transform: scale(0.97); opacity: 0.9; }
 .sf-btn-primary:disabled { opacity: 0.38; }
 
 .sf-input {
@@ -114,6 +157,8 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
   outline: none;
   width: 100%;
+  /* Prevent iOS styling */
+  -webkit-appearance: none;
 }
 .sf-input:focus {
   border-color: var(--blue);
@@ -146,6 +191,8 @@ body {
   cursor: pointer;
   width: 100%;
   text-align: left;
+  border: none;
+  background: transparent;
 }
 .sf-nav-item:hover     { background: var(--fill-tertiary); color: var(--label); }
 .sf-nav-item.active    { background: rgba(0,122,255,0.12); color: var(--blue); font-weight: 600; }

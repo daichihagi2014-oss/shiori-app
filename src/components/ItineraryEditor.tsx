@@ -208,7 +208,7 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
   )
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="editor-shell flex" style={{ background: 'var(--bg)' }}>
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 flex-shrink-0" style={{ background: 'var(--bg-elevated)', borderRight: '1px solid var(--separator-opaque)' }}>
         <NavContent />
@@ -217,7 +217,7 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
       {/* Mobile slide-over */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <div className="absolute inset-0 bg-black/40" style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }} onClick={() => setSidebarOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col shadow-2xl animate-slide-in" style={{ background: 'var(--bg-elevated)' }}>
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--separator-opaque)' }}>
               <span className="sf-headline">🗺️ メニュー</span>
