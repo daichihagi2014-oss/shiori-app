@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, Check, Plus, Home, LayoutList, Menu, X, RefreshCw, ArrowLeft } from 'lucide-react'
-import { Itinerary, Section, SectionType } from '@/lib/types'
+import { Copy, Check, Home, LayoutList, Menu, X, RefreshCw, ArrowLeft } from 'lucide-react'
+import { Itinerary, Section, SectionType, TripMember } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
-import { getItinerary, addSection, deleteSection } from '@/lib/db'
+import { getItinerary, addSection } from '@/lib/db'
 import CoverSection from './sections/CoverSection'
 import ScheduleSection from './sections/ScheduleSection'
 import TodoSection from './sections/TodoSection'
@@ -13,61 +13,79 @@ import MemoSection from './sections/MemoSection'
 import ExpenseSection from './sections/ExpenseSection'
 import MembersSection from './sections/MembersSection'
 import PlacesSection from './sections/PlacesSection'
-import { TripMember } from '@/lib/types'
 
 interface Props {
   itinerary: Itinerary
   slug: string
 }
 
+// Fixed section list — always shown in this order, auto-created if missing
+const DEFAULT_SECTIONS: { type: SectionType; title: string }[] = [
+  { type: 'members',  title: '旅のメンバー' },
+  { type: 'schedule', title: 'スケジュール' },
+  { type: 'places',   title: '候補地リスト' },
+  { type: 'todo',     title: 'TODOリスト' },
+  { type: 'packing',  title: '持ち物リスト' },
+  { type: 'memo',     title: 'メモ' },
+  { type: 'expense',  title: '費用管理' },
+]
+
 const SECTION_ICONS: Record<SectionType, string> = {
+  members:  '👥',
   schedule: '📅',
+  places:   '📌',
   todo:     '✅',
   packing:  '🎒',
   memo:     '📝',
   expense:  '💴',
-  members:  '👥',
-  places:   '📌',
 }
 
 const SECTION_SHORT: Record<SectionType, string> = {
+  members:  'メンバー',
   schedule: '予定',
+  places:   '候補地',
   todo:     'TODO',
   packing:  '持物',
   memo:     'メモ',
   expense:  '費用',
-  members:  'メンバー',
-  places:   '候補地',
 }
 
-const SECTION_ADD_OPTIONS: { type: SectionType; label: string }[] = [
-  { type: 'members',  label: '👥 旅のメンバー' },
-  { type: 'schedule', label: '📅 スケジュール' },
-  { type: 'places',   label: '📌 候補地リスト' },
-  { type: 'todo',     label: '✅ TODOリスト' },
-  { type: 'packing',  label: '🎒 持ち物リスト' },
-  { type: 'memo',     label: '📝 メモ' },
-  { type: 'expense',  label: '💴 費用管理' },
-]
+// Bottom tab bar: cover + these 4 types
+const BOTTOM_TABS: SectionType[] = ['schedule', 'places', 'members', 'expense']
 
-const SECTION_TITLES: Record<SectionType, string> = {
-  schedule: 'スケジュール',
-  todo:     'TODOリスト',
-  packing:  '持ち物リスト',
-  memo:     'メモ',
-  expense:  '費用管理',
-  members:  '旅のメンバー',
-  places:   '候補地リスト',
-}
+type ActiveKey = 'cover' | SectionType
 
 export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
   const router = useRouter()
   const [itinerary, setItinerary] = useState<Itinerary>(initial)
-  const [activeSection, setActiveSection] = useState<string>('cover')
+  const [active, setActive] = useState<ActiveKey>('cover')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [showAddMenu, setShowAddMenu] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const ensuredRef = useRef(false)
+
+  // Auto-create any missing sections on first load
+  useEffect(() => {
+    if (ensuredRef.current) return
+    ensuredRef.current = true
+
+    const existingTypes = new Set(itinerary.sections.map(s => s.type))
+    const missing = DEFAULT_SECTIONS.filter(ds => !existingTypes.has(ds.type))
+    if (!missing.length) return
+
+    async function createMissing() {
+      let nextPos = itinerary.sections.length
+      const created: Section[] = []
+      for (const ds of missing) {
+        const section = await addSection(itinerary.id, ds.type, ds.title, nextPos++)
+        if (section) created.push(section)
+      }
+      if (created.length) {
+        setItinerary(prev => ({ ...prev, sections: [...prev.sections, ...created] }))
+      }
+    }
+    createMissing()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
     setSyncing(true)
@@ -96,29 +114,23 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
     setItinerary(prev => ({ ...prev, sections: prev.sections.map(s => s.id === updated.id ? updated : s) }))
   }
 
-  async function handleAddSection(type: SectionType) {
-    setShowAddMenu(false)
-    const section = await addSection(itinerary.id, type, SECTION_TITLES[type], itinerary.sections.length)
-    if (section) {
-      setItinerary(prev => ({ ...prev, sections: [...prev.sections, section] }))
-      setActiveSection(section.id)
-    }
-  }
-
-  async function handleDeleteSection(sectionId: string) {
-    if (!confirm('このセクションを削除しますか？')) return
-    await deleteSection(sectionId)
-    setItinerary(prev => ({ ...prev, sections: prev.sections.filter(s => s.id !== sectionId) }))
-    setActiveSection('cover')
-  }
+  // Sections in canonical order (includes both existing and "pending" entries)
+  const orderedSections = DEFAULT_SECTIONS.map(ds => ({
+    def: ds,
+    section: itinerary.sections.find(s => s.type === ds.type) ?? null,
+  }))
 
   const membersSection = itinerary.sections.find(s => s.type === 'members')
   const tripMemberNames: string[] = ((membersSection?.data?.members as TripMember[]) ?? []).map(m => m.name)
 
   function renderSection(section: Section) {
     switch (section.type) {
+      case 'members':
+        return <MembersSection key={section.id} section={section} onUpdate={updateSection} />
       case 'schedule':
         return <ScheduleSection key={section.id} section={section} startDate={itinerary.start_date} members={tripMemberNames} onUpdate={updateSection} />
+      case 'places':
+        return <PlacesSection key={section.id} section={section} onUpdate={updateSection} />
       case 'todo':
         return <TodoSection key={section.id} section={section} onUpdate={updateSection} accentColor="green" icon="✅" />
       case 'packing':
@@ -127,19 +139,20 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
         return <MemoSection key={section.id} section={section} onUpdate={updateSection} />
       case 'expense':
         return <ExpenseSection key={section.id} section={section} itinerary={itinerary} tripMembers={tripMemberNames} onUpdate={updateSection} />
-      case 'members':
-        return <MembersSection key={section.id} section={section} onUpdate={updateSection} />
-      case 'places':
-        return <PlacesSection key={section.id} section={section} onUpdate={updateSection} />
     }
   }
 
-  const allSections = itinerary.sections
-  const activeSectionData = allSections.find(s => s.id === activeSection)
+  const activeSection = active !== 'cover'
+    ? itinerary.sections.find(s => s.type === active) ?? null
+    : null
+
+  function navigate(key: ActiveKey) {
+    setActive(key)
+    setSidebarOpen(false)
+  }
 
   const NavContent = () => (
     <nav className="flex flex-col h-full">
-      {/* Top: back + title */}
       <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid var(--separator-opaque)' }}>
         <button
           onClick={() => router.push('/')}
@@ -152,67 +165,26 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
         <div className="sf-caption mt-0.5 font-mono" style={{ color: 'var(--label-tertiary)' }}>{slug}</div>
       </div>
 
-      {/* Section list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
         <button
-          onClick={() => { setActiveSection('cover'); setSidebarOpen(false) }}
-          className={`sf-nav-item ${activeSection === 'cover' ? 'active' : ''}`}
+          onClick={() => navigate('cover')}
+          className={`sf-nav-item ${active === 'cover' ? 'active' : ''}`}
         >
           <Home size={14} /> 表紙
         </button>
 
-        {allSections.map(s => (
-          <div key={s.id} className="group relative">
-            <button
-              onClick={() => { setActiveSection(s.id); setSidebarOpen(false) }}
-              className={`sf-nav-item pr-8 ${activeSection === s.id ? 'active' : ''}`}
-            >
-              <span>{SECTION_ICONS[s.type]}</span>
-              <span className="truncate">{s.title}</span>
-            </button>
-            <button
-              onClick={() => handleDeleteSection(s.id)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-0.5"
-              style={{ color: 'var(--label-quaternary)' }}
-            >
-              <X size={12} />
-            </button>
-          </div>
-        ))}
-
-        {/* Add section */}
-        <div className="relative pt-2">
+        {orderedSections.map(({ def, section }) => (
           <button
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm transition-colors"
-            style={{
-              border: '1.5px dashed var(--separator-opaque)',
-              color: 'var(--label-tertiary)',
-            }}
+            key={def.type}
+            onClick={() => navigate(def.type)}
+            className={`sf-nav-item ${active === def.type ? 'active' : ''} ${!section ? 'opacity-40' : ''}`}
           >
-            <Plus size={13} /> セクションを追加
+            <span>{SECTION_ICONS[def.type]}</span>
+            <span className="truncate">{def.title}</span>
           </button>
-          {showAddMenu && (
-            <div className="absolute bottom-full left-0 mb-1 rounded-xl shadow-xl overflow-hidden z-20 w-48 animate-scale-in"
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--separator-opaque)' }}>
-              {SECTION_ADD_OPTIONS.map(o => (
-                <button
-                  key={o.type}
-                  onClick={() => handleAddSection(o.type)}
-                  className="flex items-center w-full px-4 py-2.5 text-sm transition-colors text-left"
-                  style={{ color: 'var(--label)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,122,255,0.06)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '' }}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        ))}
       </div>
 
-      {/* Share */}
       <div className="p-3" style={{ borderTop: '1px solid var(--separator-opaque)' }}>
         <button
           onClick={copyUrl}
@@ -263,13 +235,13 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
           </button>
         </header>
 
-        {/* Desktop breadcrumb bar */}
+        {/* Desktop breadcrumb */}
         <div className="hidden md:flex items-center justify-between px-6 py-2.5 flex-shrink-0" style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--separator-opaque)' }}>
           <div className="flex items-center gap-2 sf-subhead" style={{ color: 'var(--label-secondary)' }}>
             <LayoutList size={13} />
-            {activeSectionData
-              ? `${SECTION_ICONS[activeSectionData.type]} ${activeSectionData.title}`
-              : '🏠 表紙'}
+            {active === 'cover'
+              ? '🏠 表紙'
+              : `${SECTION_ICONS[active as SectionType]} ${DEFAULT_SECTIONS.find(d => d.type === active)?.title ?? ''}`}
           </div>
           <div className="flex items-center gap-3">
             <button onClick={refresh} className={`flex items-center gap-1 text-xs transition-colors ${syncing ? 'animate-spin' : ''}`} style={{ color: syncing ? 'var(--blue)' : 'var(--label-quaternary)' }}>
@@ -284,33 +256,20 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
 
         {/* Scroll area */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto px-4 md:px-8 py-6 space-y-8">
-            {(activeSection === 'cover' || !activeSectionData) && (
+          <div className="max-w-2xl mx-auto px-4 md:px-8 py-6">
+            {active === 'cover' && (
               <CoverSection
                 itinerary={itinerary}
                 onUpdate={patch => setItinerary(prev => ({ ...prev, ...patch }))}
               />
             )}
 
-            {activeSectionData && renderSection(activeSectionData)}
+            {active !== 'cover' && activeSection && renderSection(activeSection)}
 
-            {activeSection === 'cover' && allSections.length === 0 && (
-              <div className="text-center py-16 animate-fade-in">
-                <div className="text-5xl mb-5">✈️</div>
-                <h2 className="sf-title-3 mb-2" style={{ color: 'var(--label)' }}>セクションを追加しましょう</h2>
-                <p className="sf-footnote mb-8">サイドバーの「＋ セクションを追加」から始めてください</p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {SECTION_ADD_OPTIONS.map(o => (
-                    <button
-                      key={o.type}
-                      onClick={() => handleAddSection(o.type)}
-                      className="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors sf-card"
-                      style={{ color: 'var(--label-secondary)' }}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
+            {active !== 'cover' && !activeSection && (
+              <div className="text-center py-20 animate-fade-in">
+                <div className="text-4xl mb-3">{SECTION_ICONS[active as SectionType]}</div>
+                <p className="text-sm" style={{ color: 'var(--label-tertiary)' }}>読み込み中...</p>
               </div>
             )}
           </div>
@@ -319,29 +278,29 @@ export default function ItineraryEditor({ itinerary: initial, slug }: Props) {
         {/* Mobile bottom tab bar */}
         <nav className="md:hidden flex flex-shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--separator-opaque)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <button
-            onClick={() => setActiveSection('cover')}
-            className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs transition-colors"
-            style={{ color: activeSection === 'cover' ? 'var(--blue)' : 'var(--label-tertiary)' }}
+            onClick={() => navigate('cover')}
+            className="flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors"
+            style={{ color: active === 'cover' ? 'var(--blue)' : 'var(--label-tertiary)' }}
           >
             <Home size={20} />
             <span className="text-[10px]">表紙</span>
           </button>
 
-          {allSections.slice(0, 3).map(s => (
+          {BOTTOM_TABS.map(type => (
             <button
-              key={s.id}
-              onClick={() => setActiveSection(s.id)}
-              className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs transition-colors"
-              style={{ color: activeSection === s.id ? 'var(--blue)' : 'var(--label-tertiary)' }}
+              key={type}
+              onClick={() => navigate(type)}
+              className="flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors"
+              style={{ color: active === type ? 'var(--blue)' : 'var(--label-tertiary)' }}
             >
-              <span className="text-[18px] leading-none">{SECTION_ICONS[s.type]}</span>
-              <span className="text-[10px]">{SECTION_SHORT[s.type]}</span>
+              <span className="text-[18px] leading-none">{SECTION_ICONS[type]}</span>
+              <span className="text-[10px]">{SECTION_SHORT[type]}</span>
             </button>
           ))}
 
           <button
             onClick={() => setSidebarOpen(true)}
-            className="flex-1 flex flex-col items-center py-2 gap-0.5 text-xs transition-colors"
+            className="flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors"
             style={{ color: 'var(--label-tertiary)' }}
           >
             <LayoutList size={20} />

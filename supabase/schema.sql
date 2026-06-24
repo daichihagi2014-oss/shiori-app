@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS itineraries (
 CREATE TABLE IF NOT EXISTS sections (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   itinerary_id  UUID NOT NULL REFERENCES itineraries(id) ON DELETE CASCADE,
-  type          TEXT NOT NULL CHECK (type IN ('schedule', 'todo', 'packing', 'memo')),
+  type          TEXT NOT NULL CHECK (type IN ('schedule', 'todo', 'packing', 'memo', 'expense', 'members', 'places')),
   title         TEXT NOT NULL,
   position      INTEGER NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
