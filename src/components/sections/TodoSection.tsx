@@ -12,141 +12,152 @@ interface Props {
   icon?: string
 }
 
+const ACCENT: Record<string, { badge: string; check: string; add: string; border: string }> = {
+  green: { badge: 'rgba(52,199,89,0.12)', check: 'var(--green)', add: 'rgba(52,199,89,0.35)', border: 'rgba(52,199,89,0.15)' },
+  amber: { badge: 'rgba(255,149,0,0.12)', check: 'var(--orange)', add: 'rgba(255,149,0,0.35)', border: 'rgba(255,149,0,0.15)' },
+  blue:  { badge: 'rgba(0,122,255,0.1)',  check: 'var(--blue)',  add: 'rgba(0,122,255,0.3)',  border: 'rgba(0,122,255,0.12)' },
+}
+
+function TodoItem({ item, accentColor, onToggle, onSave, onDelete }: {
+  item: Item
+  accentColor: string
+  onToggle: () => void
+  onSave: (content: string) => void
+  onDelete: () => void
+}) {
+  const [value, setValue] = useState(item.content)
+  const ac = ACCENT[accentColor] ?? ACCENT.green
+
+  return (
+    <div className="flex items-center gap-2.5 py-2.5 px-3 rounded-xl group animate-slide-in"
+      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--separator-opaque)' }}>
+      <button
+        onClick={onToggle}
+        className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all border-2"
+        style={{
+          borderColor: item.is_checked ? ac.check : 'var(--separator-opaque)',
+          background: item.is_checked ? ac.badge : 'transparent',
+        }}
+      >
+        {item.is_checked && (
+          <span style={{ color: ac.check, fontSize: '11px', fontWeight: 700 }}>✓</span>
+        )}
+      </button>
+      <input
+        type="text"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={() => { if (value !== item.content) onSave(value) }}
+        className="flex-1 text-sm focus:outline-none bg-transparent"
+        style={{
+          color: item.is_checked ? 'var(--label-tertiary)' : 'var(--label)',
+          textDecoration: item.is_checked ? 'line-through' : 'none',
+        }}
+      />
+      <button
+        onClick={onDelete}
+        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        style={{ color: 'var(--label-quaternary)' }}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  )
+}
+
 export default function TodoSection({ section, onUpdate, accentColor = 'green', icon = '✅' }: Props) {
   const [collapsed, setCollapsed] = useState(false)
   const [adding, setAdding] = useState(false)
   const [newText, setNewText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const ac = ACCENT[accentColor] ?? ACCENT.green
 
-  const checked = section.items.filter((i) => i.is_checked).length
-  const total = section.items.length
+  const checked = section.items.filter(i => i.is_checked).length
 
   async function handleAdd() {
-    if (!newText.trim()) { setAdding(false); return }
-    const position = section.items.length
-    const newItem = await addItem(section.id, newText.trim(), position)
-    if (newItem) {
-      onUpdate({ ...section, items: [...section.items, newItem] })
-    }
-    setNewText('')
+    const text = newText.trim()
     setAdding(false)
+    setNewText('')
+    if (!text) return
+    const newItem = await addItem(section.id, text, section.items.length)
+    if (newItem) onUpdate({ ...section, items: [...section.items, newItem] })
   }
 
   async function handleToggle(item: Item) {
     const patch = { is_checked: !item.is_checked }
     await updateItem(item.id, patch)
-    onUpdate({ ...section, items: section.items.map((it) => (it.id === item.id ? { ...it, ...patch } : it)) })
+    onUpdate({ ...section, items: section.items.map(it => it.id === item.id ? { ...it, ...patch } : it) })
   }
 
-  async function handleContentChange(item: Item, content: string) {
+  async function handleSave(item: Item, content: string) {
     await updateItem(item.id, { content })
-    onUpdate({ ...section, items: section.items.map((it) => (it.id === item.id ? { ...it, content } : it)) })
+    onUpdate({ ...section, items: section.items.map(it => it.id === item.id ? { ...it, content } : it) })
   }
 
   async function handleDelete(itemId: string) {
     await deleteItem(itemId)
-    onUpdate({ ...section, items: section.items.filter((it) => it.id !== itemId) })
-  }
-
-  const colorMap: Record<string, string> = {
-    green: 'bg-green-100 text-green-700 border-green-200',
-    amber: 'bg-amber-100 text-amber-700 border-amber-200',
-    blue: 'bg-blue-100 text-blue-700 border-blue-200',
-    indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  }
-  const checkColor: Record<string, string> = {
-    green: 'text-green-500 border-green-300 bg-green-50',
-    amber: 'text-amber-500 border-amber-300 bg-amber-50',
-    blue: 'text-blue-500 border-blue-300 bg-blue-50',
-    indigo: 'text-indigo-500 border-indigo-300 bg-indigo-50',
-  }
-  const addColor: Record<string, string> = {
-    green: 'text-green-600 hover:bg-green-50 border-green-200',
-    amber: 'text-amber-600 hover:bg-amber-50 border-amber-200',
-    blue: 'text-blue-600 hover:bg-blue-50 border-blue-200',
-    indigo: 'text-indigo-600 hover:bg-indigo-50 border-indigo-200',
+    onUpdate({ ...section, items: section.items.filter(it => it.id !== itemId) })
   }
 
   return (
     <div className="animate-fade-in">
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-between w-full mb-3"
-      >
-        <h2 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-          <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${colorMap[accentColor]}`}>
+      <button onClick={() => setCollapsed(!collapsed)} className="flex items-center justify-between w-full mb-3">
+        <h2 className="sf-title-3 flex items-center gap-2" style={{ color: 'var(--label)' }}>
+          <span className="w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: ac.badge }}>
             {icon}
           </span>
           {section.title}
-          {total > 0 && (
-            <span className={`text-xs px-2 py-0.5 rounded-full border ${colorMap[accentColor]}`}>
-              {checked}/{total}
+          {section.items.length > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: ac.badge, color: ac.check }}>
+              {checked}/{section.items.length}
             </span>
           )}
         </h2>
-        {collapsed ? <ChevronDown size={18} className="text-stone-400" /> : <ChevronUp size={18} className="text-stone-400" />}
+        {collapsed ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronUp size={18} className="text-gray-400" />}
       </button>
 
       {!collapsed && (
         <div className="space-y-1.5">
           {section.items.length === 0 && !adding && (
-            <div className="text-stone-400 text-sm text-center py-5 border-2 border-dashed border-stone-200 rounded-xl">
+            <div className="text-center py-6 rounded-2xl text-sm" style={{ color: 'var(--label-tertiary)', border: '1.5px dashed var(--separator-opaque)' }}>
               アイテムを追加しましょう
             </div>
           )}
 
-          {section.items.map((item) => (
-            <div
+          {section.items.map(item => (
+            <TodoItem
               key={item.id}
-              className="flex items-center gap-2.5 py-2 px-3 bg-white rounded-xl border border-stone-200 group hover:shadow-sm transition-shadow animate-slide-in"
-            >
-              <button
-                onClick={() => handleToggle(item)}
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                  item.is_checked
-                    ? checkColor[accentColor] + ' border-opacity-50'
-                    : 'border-stone-300 hover:border-stone-400'
-                }`}
-              >
-                {item.is_checked && <span className="text-xs">✓</span>}
-              </button>
-              <input
-                type="text"
-                value={item.content}
-                onChange={(e) => handleContentChange(item, e.target.value)}
-                className={`flex-1 text-sm focus:outline-none bg-transparent transition-all ${
-                  item.is_checked ? 'line-through text-stone-400' : 'text-stone-700'
-                }`}
-              />
-              <button
-                onClick={() => handleDelete(item.id)}
-                className="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-rose-500 transition-all"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+              item={item}
+              accentColor={accentColor}
+              onToggle={() => handleToggle(item)}
+              onSave={(content) => handleSave(item, content)}
+              onDelete={() => handleDelete(item.id)}
+            />
           ))}
 
           {adding && (
-            <div className="flex items-center gap-2.5 py-2 px-3 bg-white rounded-xl border-2 border-indigo-300">
-              <div className="w-5 h-5 rounded border-2 border-stone-300 flex-shrink-0"></div>
+            <div className="flex items-center gap-2.5 py-2.5 px-3 rounded-xl"
+              style={{ background: 'var(--bg-elevated)', border: `2px solid ${ac.check}` }}>
+              <div className="w-5 h-5 rounded-full border-2 flex-shrink-0" style={{ borderColor: 'var(--separator-opaque)' }} />
               <input
                 ref={inputRef}
                 type="text"
                 value={newText}
-                onChange={(e) => setNewText(e.target.value)}
+                onChange={e => setNewText(e.target.value)}
                 onBlur={handleAdd}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNewText('') } }}
+                onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNewText('') } }}
                 placeholder="アイテムを入力..."
                 autoFocus
-                className="flex-1 text-sm focus:outline-none bg-transparent text-stone-700"
+                className="flex-1 text-sm focus:outline-none bg-transparent"
+                style={{ color: 'var(--label)' }}
               />
             </div>
           )}
 
           <button
-            onClick={() => { setAdding(true); setTimeout(() => inputRef.current?.focus(), 0) }}
-            className={`flex items-center gap-2 text-sm font-medium py-2 px-3 rounded-xl transition-colors w-full justify-center border border-dashed ${addColor[accentColor]}`}
+            onClick={() => { setAdding(true); setTimeout(() => inputRef.current?.focus(), 50) }}
+            className="flex items-center gap-2 text-sm font-medium py-2.5 px-3 rounded-xl w-full justify-center"
+            style={{ border: `1.5px dashed ${ac.add}`, color: ac.check }}
           >
             <Plus size={15} /> アイテムを追加
           </button>

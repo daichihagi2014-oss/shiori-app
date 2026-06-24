@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, GripVertical, Banknote } from 'lucide-react'
+import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, ChevronUp as Up, ChevronDown as Down, Banknote } from 'lucide-react'
 import { Section, Item, ScheduleItemMetadata } from '@/lib/types'
 import { addItem, updateItem, deleteItem } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
@@ -18,17 +18,11 @@ interface Props {
 
 export default function ScheduleSection({ section, startDate, onUpdate }: Props) {
   const [collapsed, setCollapsed] = useState(false)
-  const [draggedId, setDraggedId] = useState<string | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
 
   async function addScheduleItem() {
     const meta: ScheduleItemMetadata = {
       date: startDate ? addDays(startDate, 0) : '',
-      time: '',
-      location: '',
-      note: '',
-      emoji: '📍',
-      photo_url: '',
+      time: '', location: '', note: '', emoji: '📍', photo_url: '',
     }
     const newItem = await addItem(section.id, '', section.items.length, meta as Record<string, unknown>)
     if (newItem) onUpdate({ ...section, items: [...section.items, newItem] })
@@ -44,40 +38,14 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
     onUpdate({ ...section, items: section.items.filter(i => i.id !== itemId) })
   }
 
-  function handleDragStart(e: React.DragEvent, id: string) {
-    setDraggedId(id)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  function handleDragOver(e: React.DragEvent, id: string) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    if (id !== draggedId) setDragOverId(id)
-  }
-
-  async function handleDrop(e: React.DragEvent, targetId: string) {
-    e.preventDefault()
-    if (!draggedId || draggedId === targetId) { setDraggedId(null); setDragOverId(null); return }
-
+  async function handleMove(fromIdx: number, toIdx: number) {
+    if (toIdx < 0 || toIdx >= section.items.length) return
     const items = [...section.items]
-    const fromIdx = items.findIndex(i => i.id === draggedId)
-    const toIdx = items.findIndex(i => i.id === targetId)
     const [moved] = items.splice(fromIdx, 1)
     items.splice(toIdx, 0, moved)
-
     const updated = items.map((item, idx) => ({ ...item, position: idx }))
     onUpdate({ ...section, items: updated })
-
-    // Persist positions (fire-and-forget, no await needed for UX)
-    updated.forEach(item => updateItem(item.id, { position: item.position }))
-
-    setDraggedId(null)
-    setDragOverId(null)
-  }
-
-  function handleDragEnd() {
-    setDraggedId(null)
-    setDragOverId(null)
+    await Promise.all(updated.map(item => updateItem(item.id, { position: item.position })))
   }
 
   return (
@@ -99,34 +67,24 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
           )}
 
           {section.items.map((item, idx) => (
-            <div
+            <ScheduleItem
               key={item.id}
-              draggable
-              onDragStart={e => handleDragStart(e, item.id)}
-              onDragOver={e => handleDragOver(e, item.id)}
-              onDrop={e => handleDrop(e, item.id)}
-              onDragEnd={handleDragEnd}
-              style={{
-                opacity: draggedId === item.id ? 0.4 : 1,
-                outline: dragOverId === item.id && draggedId !== item.id ? '2px solid var(--blue)' : 'none',
-                borderRadius: '16px',
-                transition: 'opacity 0.15s',
-              }}
-            >
-              <ScheduleItem
-                item={item}
-                prevDate={idx > 0 ? (section.items[idx - 1].metadata as ScheduleItemMetadata).date : undefined}
-                onUpdate={(patch) => handleItemUpdate(item.id, patch)}
-                onDelete={() => handleDelete(item.id)}
-                startDate={startDate}
-                sectionId={section.id}
-              />
-            </div>
+              item={item}
+              idx={idx}
+              total={section.items.length}
+              prevDate={idx > 0 ? (section.items[idx - 1].metadata as ScheduleItemMetadata).date : undefined}
+              onSave={(patch) => handleItemUpdate(item.id, patch)}
+              onDelete={() => handleDelete(item.id)}
+              onMoveUp={() => handleMove(idx, idx - 1)}
+              onMoveDown={() => handleMove(idx, idx + 1)}
+              startDate={startDate}
+              sectionId={section.id}
+            />
           ))}
 
           <button
             onClick={addScheduleItem}
-            className="flex items-center gap-2 text-sm font-medium py-2.5 px-4 rounded-xl w-full justify-center transition-colors"
+            className="flex items-center gap-2 text-sm font-medium py-2.5 px-4 rounded-xl w-full justify-center"
             style={{ border: '1.5px dashed rgba(0,122,255,0.35)', color: 'var(--blue)' }}
           >
             <Plus size={15} /> スケジュールを追加
@@ -137,23 +95,39 @@ export default function ScheduleSection({ section, startDate, onUpdate }: Props)
   )
 }
 
-function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId }: {
+function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, onMoveDown, startDate, sectionId }: {
   item: Item
+  idx: number
+  total: number
   prevDate?: string
-  onUpdate: (patch: Partial<Item>) => void
+  onSave: (patch: Partial<Item>) => void
   onDelete: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
   startDate?: string | null
   sectionId: string
 }) {
+  const meta = item.metadata as ScheduleItemMetadata
   const [showEmoji, setShowEmoji] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const meta = item.metadata as ScheduleItemMetadata
-  const showDivider = meta.date && meta.date !== prevDate
 
-  function updateMeta(key: keyof ScheduleItemMetadata, value: string | number) {
-    const parsed = key === 'amount' ? (value === '' ? undefined : Number(value)) : value
-    onUpdate({ metadata: { ...meta, [key]: parsed } as Record<string, unknown> })
+  // ── Local state for all text fields (only saved to DB on blur) ──
+  const [content, setContent] = useState(item.content)
+  const [location, setLocation] = useState(meta.location ?? '')
+  const [note, setNote] = useState(meta.note ?? '')
+  const [paidBy, setPaidBy] = useState(meta.paid_by ?? '')
+  const [amount, setAmount] = useState(meta.amount?.toString() ?? '')
+
+  // Merge updated metadata and save
+  function saveMeta(update: Partial<ScheduleItemMetadata>) {
+    onSave({ metadata: { ...meta, ...update } as Record<string, unknown> })
+  }
+
+  // Immediate-save fields (no IME issue: select/date/time/emoji)
+  function updateMetaImmediate(update: Partial<ScheduleItemMetadata>) {
+    onSave({ metadata: { ...meta, ...update } as Record<string, unknown> })
   }
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -161,15 +135,21 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
     if (!file) return
     if (file.size > 15 * 1024 * 1024) { alert('15MB以下の画像を選択してください'); return }
     setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `schedule/${sectionId}_${item.id}.${ext}`
+    setUploadError('')
+    const ext = file.name.split('.').pop() ?? 'jpg'
+    const path = `schedule/${sectionId}_${item.id}_${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('shiori-images').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data } = supabase.storage.from('shiori-images').getPublicUrl(path)
-      updateMeta('photo_url', data.publicUrl)
+    if (error) {
+      setUploadError('アップロード失敗: ' + error.message)
+      setUploading(false)
+      return
     }
+    const { data } = supabase.storage.from('shiori-images').getPublicUrl(path)
+    saveMeta({ photo_url: data.publicUrl })
     setUploading(false)
   }
+
+  const showDivider = meta.date && meta.date !== prevDate
 
   return (
     <div className="animate-slide-in">
@@ -184,26 +164,43 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
       )}
 
       <div className="sf-card px-3 py-3 group">
-        <div className="flex gap-2.5">
-          {/* Drag handle */}
-          <div className="flex-shrink-0 flex flex-col items-center pt-1 gap-0.5 cursor-grab active:cursor-grabbing" style={{ color: 'var(--label-quaternary)' }}>
-            <GripVertical size={14} />
+        <div className="flex gap-2">
+          {/* Reorder buttons (works on all devices) */}
+          <div className="flex flex-col gap-0.5 flex-shrink-0 justify-center">
+            <button
+              onClick={onMoveUp}
+              disabled={idx === 0}
+              className="rounded-md p-0.5 transition-colors disabled:opacity-20"
+              style={{ color: 'var(--label-tertiary)' }}
+            >
+              <Up size={14} />
+            </button>
+            <button
+              onClick={onMoveDown}
+              disabled={idx === total - 1}
+              className="rounded-md p-0.5 transition-colors disabled:opacity-20"
+              style={{ color: 'var(--label-tertiary)' }}
+            >
+              <Down size={14} />
+            </button>
           </div>
 
           {/* Emoji picker */}
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setShowEmoji(!showEmoji)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-colors"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
               style={{ background: 'rgba(0,122,255,0.08)' }}
             >
               {meta.emoji || '📍'}
             </button>
             {showEmoji && (
-              <div className="absolute top-10 left-0 z-30 rounded-2xl p-2 shadow-xl grid grid-cols-5 gap-1 w-44" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--separator-opaque)' }}>
+              <div className="absolute top-10 left-0 z-30 rounded-2xl p-2 shadow-xl grid grid-cols-5 gap-1 w-44"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--separator-opaque)' }}>
                 {EMOJIS.map(e => (
-                  <button key={e} onClick={() => { updateMeta('emoji', e); setShowEmoji(false) }}
-                    className="text-lg p-1 rounded-lg hover:bg-gray-100 transition-colors">
+                  <button key={e}
+                    onClick={() => { updateMetaImmediate({ emoji: e }); setShowEmoji(false) }}
+                    className="text-lg p-1 rounded-lg hover:bg-gray-100">
                     {e}
                   </button>
                 ))}
@@ -211,82 +208,86 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
             )}
           </div>
 
+          {/* Fields */}
           <div className="flex-1 min-w-0 space-y-1.5">
-            {/* Time + Date row */}
+            {/* Time + Date */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1">
                 <Clock size={11} style={{ color: 'var(--label-tertiary)' }} />
                 <input
                   type="time"
-                  value={meta.time || ''}
-                  onChange={e => updateMeta('time', e.target.value)}
+                  value={meta.time ?? ''}
+                  onChange={e => updateMetaImmediate({ time: e.target.value })}
                   className="text-xs focus:outline-none bg-transparent font-mono"
                   style={{ color: 'var(--label-secondary)', width: '72px' }}
                 />
               </div>
               <input
                 type="date"
-                value={meta.date || ''}
-                onChange={e => updateMeta('date', e.target.value)}
+                value={meta.date ?? ''}
+                onChange={e => updateMetaImmediate({ date: e.target.value })}
                 min={startDate || undefined}
                 className="text-xs rounded-lg px-2 py-0.5 focus:outline-none"
                 style={{ border: '1px solid var(--separator-opaque)', background: 'var(--fill-tertiary)', color: 'var(--label-secondary)' }}
               />
             </div>
 
-            {/* Activity name */}
+            {/* Content — local state, save on blur */}
             <input
               type="text"
-              value={item.content}
-              onChange={e => onUpdate({ content: e.target.value })}
-              onBlur={e => updateItem(item.id, { content: e.target.value })}
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              onBlur={() => { if (content !== item.content) onSave({ content }) }}
               placeholder="活動内容（例: 伏見稲荷大社を観光）"
-              className="w-full text-sm font-medium focus:outline-none bg-transparent placeholder-gray-300"
+              className="w-full text-sm font-medium focus:outline-none bg-transparent"
               style={{ color: 'var(--label)' }}
             />
 
-            {/* Location */}
+            {/* Location — local state, save on blur */}
             <div className="flex items-center gap-1">
               <MapPin size={11} style={{ color: 'var(--label-tertiary)' }} className="flex-shrink-0" />
               <input
                 type="text"
-                value={meta.location || ''}
-                onChange={e => updateMeta('location', e.target.value)}
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                onBlur={() => saveMeta({ location })}
                 placeholder="場所・住所"
                 className="text-xs focus:outline-none bg-transparent w-full"
                 style={{ color: 'var(--label-secondary)' }}
               />
             </div>
 
-            {/* Note */}
+            {/* Note — local state, save on blur */}
             <input
               type="text"
-              value={meta.note || ''}
-              onChange={e => updateMeta('note', e.target.value)}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              onBlur={() => saveMeta({ note })}
               placeholder="メモ（要予約、入場料 ¥800 など）"
               className="text-xs focus:outline-none bg-transparent w-full"
               style={{ color: 'var(--label-tertiary)' }}
             />
 
-            {/* Cost */}
-            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+            {/* Cost — local state, save on blur */}
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1">
-                <Banknote size={11} style={{ color: 'var(--label-tertiary)', flexShrink: 0 }} />
+                <Banknote size={11} style={{ color: 'var(--label-tertiary)' }} />
                 <span className="text-xs" style={{ color: 'var(--label-tertiary)' }}>¥</span>
                 <input
                   type="number"
-                  value={meta.amount ?? ''}
-                  onChange={e => updateMeta('amount', e.target.value === '' ? '' : e.target.value)}
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  onBlur={() => saveMeta({ amount: amount === '' ? undefined : Number(amount) })}
                   placeholder="0"
                   className="text-xs focus:outline-none bg-transparent font-mono w-20"
-                  style={{ color: meta.amount ? 'var(--green)' : 'var(--label-tertiary)' }}
+                  style={{ color: amount && Number(amount) > 0 ? 'var(--green)' : 'var(--label-tertiary)' }}
                 />
               </div>
-              {(meta.amount && Number(meta.amount) > 0) ? (
+              {amount && Number(amount) > 0 && (
                 <>
                   <select
                     value={meta.category ?? 'その他'}
-                    onChange={e => updateMeta('category', e.target.value)}
+                    onChange={e => updateMetaImmediate({ category: e.target.value })}
                     className="text-xs rounded-lg px-2 py-0.5 focus:outline-none"
                     style={{ background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)' }}
                   >
@@ -294,14 +295,15 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
                   </select>
                   <input
                     type="text"
-                    value={meta.paid_by ?? ''}
-                    onChange={e => updateMeta('paid_by', e.target.value)}
+                    value={paidBy}
+                    onChange={e => setPaidBy(e.target.value)}
+                    onBlur={() => saveMeta({ paid_by: paidBy })}
                     placeholder="支払者"
                     className="text-xs focus:outline-none rounded-lg px-2 py-0.5"
                     style={{ background: 'var(--fill-tertiary)', color: 'var(--label-secondary)', border: '1px solid var(--separator-opaque)', width: '72px' }}
                   />
                 </>
-              ) : null}
+              )}
             </div>
 
             {/* Photo */}
@@ -309,24 +311,28 @@ function ScheduleItem({ item, prevDate, onUpdate, onDelete, startDate, sectionId
               <div className="relative mt-1">
                 <img src={meta.photo_url} alt="" className="w-full h-28 object-cover rounded-xl" />
                 <button
-                  onClick={() => updateMeta('photo_url', '')}
+                  onClick={() => saveMeta({ photo_url: '' })}
                   className="absolute top-1.5 right-1.5 rounded-full w-6 h-6 flex items-center justify-center text-white text-xs"
                   style={{ background: 'rgba(0,0,0,0.5)' }}
                 >✕</button>
               </div>
             ) : (
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 text-xs mt-0.5 transition-colors"
-                style={{ color: 'var(--label-tertiary)' }}
-              >
-                {uploading ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
-                {uploading ? 'アップロード中...' : '写真を追加'}
-              </button>
+              <div>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="flex items-center gap-1.5 text-xs mt-0.5"
+                  style={{ color: 'var(--label-tertiary)' }}
+                >
+                  {uploading ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
+                  {uploading ? 'アップロード中...' : '写真を追加'}
+                </button>
+                {uploadError && <p className="text-xs mt-0.5" style={{ color: 'var(--red)' }}>{uploadError}</p>}
+              </div>
             )}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
           </div>
 
+          {/* Delete */}
           <button
             onClick={onDelete}
             className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 rounded-full p-1 self-start"
