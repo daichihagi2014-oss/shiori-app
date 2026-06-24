@@ -1,11 +1,11 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, ChevronUp as Up, ChevronDown as Down, Banknote, Timer } from 'lucide-react'
+import { Plus, Trash2, Clock, MapPin, ChevronDown, ChevronUp, Camera, Loader2, Banknote, Timer } from 'lucide-react'
 import { Section, Item, ScheduleItemMetadata } from '@/lib/types'
 import { addItem, updateItem, deleteItem } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
-import { formatDateShort, addDays } from '@/lib/utils'
+import { formatDateShort } from '@/lib/utils'
 
 // ─── Emoji → category color mapping ───
 type EmojiCategory = { color: string; bg: string; shadow: string; label: string }
@@ -87,9 +87,12 @@ interface Props {
 export default function ScheduleSection({ section, startDate, members, onUpdate }: Props) {
   const [collapsed, setCollapsed] = useState(false)
 
+  const todayStr = new Date().toISOString().split('T')[0]
+  const defaultDate = startDate ?? todayStr
+
   async function addScheduleItem() {
     const meta: ScheduleItemMetadata = {
-      date: startDate ? addDays(startDate, 0) : '',
+      date: defaultDate,
       time: '', location: '', note: '', emoji: '📍', photo_url: '',
     }
     const newItem = await addItem(section.id, '', section.items.length, meta as Record<string, unknown>)
@@ -106,15 +109,19 @@ export default function ScheduleSection({ section, startDate, members, onUpdate 
     onUpdate({ ...section, items: section.items.filter(i => i.id !== itemId) })
   }
 
-  async function handleMove(fromIdx: number, toIdx: number) {
-    if (toIdx < 0 || toIdx >= section.items.length) return
-    const items = [...section.items]
-    const [moved] = items.splice(fromIdx, 1)
-    items.splice(toIdx, 0, moved)
-    const updated = items.map((item, idx) => ({ ...item, position: idx }))
-    onUpdate({ ...section, items: updated })
-    await Promise.all(updated.map(item => updateItem(item.id, { position: item.position })))
-  }
+  // Sort by date asc, then time asc; undated items go last
+  const sortedItems = [...section.items].sort((a, b) => {
+    const ma = a.metadata as ScheduleItemMetadata
+    const mb = b.metadata as ScheduleItemMetadata
+    if (!ma.date && !mb.date) return a.position - b.position
+    if (!ma.date) return 1
+    if (!mb.date) return -1
+    if (ma.date !== mb.date) return ma.date.localeCompare(mb.date)
+    if (!ma.time && !mb.time) return a.position - b.position
+    if (!ma.time) return 1
+    if (!mb.time) return -1
+    return ma.time.localeCompare(mb.time)
+  })
 
   return (
     <div className="animate-fade-in">
@@ -144,23 +151,19 @@ export default function ScheduleSection({ section, startDate, members, onUpdate 
             ))}
           </div>
 
-          {section.items.length === 0 && (
+          {sortedItems.length === 0 && (
             <div className="text-center py-8 rounded-2xl text-sm" style={{ color: 'var(--label-tertiary)', border: '1.5px dashed var(--separator-opaque)' }}>
               スケジュールを追加しましょう
             </div>
           )}
 
-          {section.items.map((item, idx) => (
+          {sortedItems.map((item, idx) => (
             <ScheduleItem
               key={item.id}
               item={item}
-              idx={idx}
-              total={section.items.length}
-              prevDate={idx > 0 ? (section.items[idx - 1].metadata as ScheduleItemMetadata).date : undefined}
+              prevDate={idx > 0 ? (sortedItems[idx - 1].metadata as ScheduleItemMetadata).date : undefined}
               onSave={(patch) => handleItemSave(item.id, patch)}
               onDelete={() => handleDelete(item.id)}
-              onMoveUp={() => handleMove(idx, idx - 1)}
-              onMoveDown={() => handleMove(idx, idx + 1)}
               startDate={startDate}
               sectionId={section.id}
               members={members}
@@ -180,10 +183,9 @@ export default function ScheduleSection({ section, startDate, members, onUpdate 
   )
 }
 
-function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, onMoveDown, startDate, sectionId, members }: {
-  item: Item; idx: number; total: number; prevDate?: string
+function ScheduleItem({ item, prevDate, onSave, onDelete, startDate, sectionId, members }: {
+  item: Item; prevDate?: string
   onSave: (patch: Partial<Item>) => void; onDelete: () => void
-  onMoveUp: () => void; onMoveDown: () => void
   startDate?: string | null; sectionId: string; members?: string[]
 }) {
   const meta = item.metadata as ScheduleItemMetadata
@@ -241,20 +243,6 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
         boxShadow: `${cat.shadow}, 0 1px 0 rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)`,
       }}>
         <div className="flex gap-2">
-          {/* Reorder buttons */}
-          <div className="flex flex-col gap-0.5 flex-shrink-0 justify-center">
-            <button onClick={onMoveUp} disabled={idx === 0}
-              className="rounded p-0.5 disabled:opacity-20 transition-colors"
-              style={{ color: cat.color }}>
-              <Up size={13} />
-            </button>
-            <button onClick={onMoveDown} disabled={idx === total - 1}
-              className="rounded p-0.5 disabled:opacity-20 transition-colors"
-              style={{ color: cat.color }}>
-              <Down size={13} />
-            </button>
-          </div>
-
           {/* Emoji picker */}
           <div className="relative flex-shrink-0">
             <button
@@ -362,7 +350,7 @@ function ScheduleItem({ item, idx, total, prevDate, onSave, onDelete, onMoveUp, 
               />
               {location.trim() && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`}
+                  href={`https://maps.google.com/?q=${encodeURIComponent(location)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs shrink-0 px-1.5 py-0.5 rounded-md font-medium"

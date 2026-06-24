@@ -2,6 +2,27 @@
 
 import { useState } from 'react'
 import { Trash2, ChevronDown, ChevronUp, Calculator, Users, Plus, ArrowRight } from 'lucide-react'
+
+// Local-state input to avoid controlled-input re-render issues on mobile
+function RatioInput({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+  const [local, setLocal] = useState(String(value))
+  return (
+    <input
+      type="number"
+      value={local}
+      min={0}
+      max={100}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => {
+        const n = parseInt(local, 10)
+        if (!isNaN(n) && n >= 0 && n <= 100) { onSave(n) }
+        else setLocal(String(value))
+      }}
+      className="w-16 px-2 py-1.5 rounded-lg text-sm text-center font-mono"
+      style={{ border: '1.5px solid var(--separator-opaque)', background: 'var(--fill-tertiary)' }}
+    />
+  )
+}
 import { Section, Itinerary, ScheduleItemMetadata, ExpenseMember } from '@/lib/types'
 import { updateSection } from '@/lib/db'
 
@@ -283,14 +304,10 @@ export default function ExpenseSection({ section, itinerary, tripMembers = [], o
                   {activeMembers.map(name => (
                     <div key={name} className="flex items-center gap-2">
                       <span className="text-sm font-medium truncate" style={{ width: '72px' }}>{name}</span>
-                      <input
-                        type="number"
+                      <RatioInput
+                        key={`${name}-${getRatio(name)}`}
                         value={getRatio(name)}
-                        min={0}
-                        max={100}
-                        onChange={async e => updateRatio(name, Number(e.target.value))}
-                        className="w-16 px-2 py-1.5 rounded-lg text-sm text-center font-mono"
-                        style={{ border: '1.5px solid var(--separator-opaque)', background: 'var(--fill-tertiary)' }}
+                        onSave={v => updateRatio(name, v)}
                       />
                       <span className="text-sm" style={{ color: 'var(--label-secondary)' }}>%</span>
                       <span className="ml-auto text-sm font-semibold shrink-0" style={{ color: 'var(--green)' }}>
